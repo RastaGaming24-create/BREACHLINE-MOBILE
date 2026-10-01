@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>BREACHLINE MOBILE</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080b09;color:#e9eee8;font-family:Arial,sans-serif;touch-action:none}
+*{box-sizing:border-box}
+#menu{position:absolute;inset:0;padding:42px 24px;background:linear-gradient(#101713,#050706);z-index:5}
+h1{font-size:46px;letter-spacing:-3px;margin:12vh 0 5px}h1 span{color:#a9c37f}.sub{color:#829087;letter-spacing:3px;font-size:10px}
+button{border:1px solid #52604f;background:#172019;color:#e9eee8;padding:16px;font-weight:bold;font-size:15px}
+#start{margin-top:35px;width:260px;background:#a9c37f;color:#071007;border:0}
+#status{margin-top:25px;color:#91a091;font-size:11px;line-height:1.7}
+#game{display:none;position:absolute;inset:0}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+#hud{position:absolute;inset:0;pointer-events:none;text-shadow:0 2px 4px #000}
+#top{position:absolute;top:calc(14px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;font-size:10px;letter-spacing:2px}
+#obj{position:absolute;top:65px;left:14px;border-left:3px solid #a9c37f;padding-left:9px;font-size:18px}
+#obj small{display:block;font-size:8px;color:#9da89f;letter-spacing:2px}
+#cross{position:absolute;left:50%;top:50%;font-size:25px;transform:translate(-50%,-50%);color:#d3e4ae}
+#ammo{position:absolute;right:15px;bottom:110px;text-align:right}
+#ammo b{font-size:48px}.label{font-size:9px;color:#a7b1a9}
+#hp{position:absolute;left:15px;bottom:115px;font-size:11px}.bar{width:150px;height:5px;background:#303831;margin-top:6px}.bar i{display:block;height:100%;background:#a9c37f}
+#mini{position:absolute;right:12px;top:62px;width:112px;height:112px;border:1px solid #687568;background:#0a0e0c}
+.ctrl{position:absolute;bottom:20px;width:105px;height:105px;border:1px solid #aab4aa66;border-radius:50%;background:#101510aa}
+#left{left:15px}#right{right:15px}.knob{position:absolute;width:45px;height:45px;left:29px;top:29px;border-radius:50%;background:#a9c37f99}
+.btn{position:absolute;width:64px;height:64px;border-radius:50%;padding:0;font-size:10px;background:#121813dd}
+#fire{right:135px;bottom:25px;width:80px;height:80px;background:#a9c37f;color:#071007}
+#reload{right:215px;bottom:35px}#use{right:15px;bottom:145px}
+#end{display:none;position:absolute;inset:0;background:#050706ed;z-index:10;align-items:center;justify-content:center;text-align:center}.box{padding:30px;border:1px solid #566151;background:#101610;width:85%}
+</style>
+</head>
+<body>
+<div id="menu">
+<div class="sub">TACTICAL RESPONSE UNIT // MOBILE</div>
+<h1>BREACH<span>LINE</span></h1>
+<div class="sub">PLAYABLE MOBILE FPS // BUILD 0.3</div>
+<button id="start">▶ DEPLOY — NIGHTFALL HOTEL</button>
+<div id="status">MAP: NIGHTFALL HOTEL<br>OBJECTIVE: CLEAR THE LOBBY<br>CONTROLS: LEFT MOVE · RIGHT LOOK · FIRE · RELOAD · USE<br><br>5 HOSTILES · EXTRACTION AFTER CLEARING THE AREA</div>
+</div>
+<div id="game">
+<canvas id="view"></canvas><canvas id="mini" width="112" height="112"></canvas>
+<div id="hud"><div id="top"><span>BREACHLINE</span><span>OP 001 // NIGHTFALL</span></div><div id="obj"><small>OBJECTIVE</small><span id="objective">CLEAR THE LOBBY</span></div><div id="cross">+</div><div id="ammo"><div class="label">K-9 PDW</div><b id="a">30</b><span class="label"> / <span id="r">120</span></span></div><div id="hp">ARMOR <span id="h">100</span>%<div class="bar"><i id="hb"></i></div></div>
+<div class="ctrl" id="left"><div class="knob"></div></div><div class="ctrl" id="right"><div class="knob"></div></div>
+<button class="btn" id="reload">RELOAD</button><button class="btn" id="use">USE</button><button class="btn" id="fire">FIRE</button></div>
+<div id="end"><div class="box"><h2 id="et"></h2><p id="ep"></p><button id="again">REDEPLOY</button></div></div>
+</div>
+<script>
+(function(){
+"use strict";
+var MAP=[
+"################",
+"#..............#",
+"#..####..####..#",
+"#..#..#..#..#..#",
+"#..#..#..#..#..#",
+"#..#..####..#..#",
+"#..............#",
+"#..###....###..#",
+"#..#..........##",
+"#..#..####....##",
+"#..#..#..#.....#",
+"#.....#..#.....#",
+"#..####..####..#",
+"#..............#",
+"#..............#",
+"################"];
+var canvas=document.getElementById("view"),ctx=canvas.getContext("2d"),mini=document.getElementById("mini"),mc=mini.getContext("2d");
+var player,enemies,input,active=false,last=0,kills=0,ammo=30,reserve=120,hp=100,won=false;
+var spawn=[[5.5,2.8],[10.5,3.5],[7.5,6.2],[3.5,8.5],[12.5,11.5]],exit={x:13.5,y:13.5};
+function wall(x,y){return !MAP[Math.floor(y)]||MAP[Math.floor(y)][Math.floor(x)]==="#"}
+function clear(x,y,r){return !wall(x-r,y-r)&&!wall(x+r,y-r)&&!wall(x-r,y+r)&&!wall(x+r,y+r)}
+function distance(a,b,c,d){return Math.hypot(a-c,b-d)}
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}addEventListener("resize",resize);resize();
+function reset(){
+player={x:2.2,y:13.5,a:-Math.PI/2};enemies=spawn.map(function(p){return{x:p[0],y:p[1],hp:2,alive:true,alert:false,t:1}});input={lx:0,ly:0,rx:0};ammo=30;reserve=120;hp=100;kills=0;won=false;updateHud();
+}
+function updateHud(){document.getElementById("a").textContent=("0"+ammo).slice(-2);document.getElementById("r").textContent=reserve;document.getElementById("h").textContent=Math.max(0,Math.round(hp));document.getElementById("hb").style.width=Math.max(0,hp)+"%";document.getElementById("objective").textContent=kills==5?"REACH EXTRACTION":"CLEAR THE LOBBY"}
+function start(){document.getElementById("menu").style.display="none";document.getElementById("game").style.display="block";active=true;reset();last=performance.now();requestAnimationFrame(loop)}
+function shoot(){
+if(!active||ammo<=0)return;ammo--;
+var best=null,bd=99;
+enemies.forEach(function(e){if(!e.alive)return;var dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy),ang=Math.atan2(dy,dx),da=Math.atan2(Math.sin(ang-player.a),Math.cos(ang-player.a));if(Math.abs(da)<.11&&d<bd){best=e;bd=d}});
+if(best){best.hp--;if(best.hp<=0){best.alive=false;kills++;} }updateHud();
+}
+function reload(){var n=Math.min(30-ammo,reserve);ammo+=n;reserve-=n;updateHud()}
+function use(){if(kills<5)return;if(distance(player.x,player.y,exit.x,exit.y)<1.7){won=true;end("MISSION COMPLETE","Extraction reached.")}
+else flash("MOVE TO EXTRACTION")}
+function damage(){hp-=8;updateHud();if(hp<=0)end("OPERATOR DOWN","You were neutralized.")}
+function end(t,p){active=false;document.getElementById("end").style.display="flex";document.getElementById("et").textContent=t;document.getElementById("ep").textContent=p}
+function flash(t){var o=document.getElementById("objective"),old=o.textContent;o.textContent=t;setTimeout(function(){o.textContent=old},800)}
+function move(dt){
+player.a+=input.rx*2.8*dt;
+var f=-input.ly*2.2*dt,s=input.lx*2.0*dt;
+var nx=player.x+Math.cos(player.a)*f+Math.cos(player.a+Math.PI/2)*s,ny=player.y+Math.sin(player.a)*f+Math.sin(player.a+Math.PI/2)*s;
+if(clear(nx,player.y,.18))player.x=nx;if(clear(player.x,ny,.18))player.y=ny;
+enemies.forEach(function(e){if(!e.alive)return;var d=distance(e.x,e.y,player.x,player.y);if(d<6)e.alert=true;if(e.alert&&d>1.5){var a=Math.atan2(player.y-e.y,player.x-e.x),sp=.35*dt,nx=e.x+Math.cos(a)*sp,ny=e.y+Math.sin(a)*sp;if(clear(nx,e.y,.16))e.x=nx;if(clear(e.x,ny,.16))e.y=ny}if(e.alert&&d<5){e.t-=dt;if(e.t<=0){e.t=1.8;damage()}}});
+if(kills==5&&distance(player.x,player.y,exit.x,exit.y)<1.5)flash("EXTRACTION READY");
+}
+function ray(a){var x=player.x,y=player.y,d=0,step=.025;while(d<24){x+=Math.cos(a)*step;y+=Math.sin(a)*step;d+=step;if(wall(x,y))return d}return 24}
+function draw(){
+var W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.fillStyle="#59615b";ctx.fillRect(0,0,W,H*.5);ctx.fillStyle="#0b0e0c";ctx.fillRect(0,H*.5,W,H*.5);
+var fov=Math.PI/3,n=Math.min(360,Math.floor(W/2)),rw=W/n;
+for(var i=0;i<n;i++){var a=player.a-fov/2+fov*i/n,d=ray(a)*Math.cos(a-player.a),wh=Math.min(H*2,H/(d*.75)),shade=Math.max(25,145-d*10);ctx.fillStyle="rgb("+shade+","+Math.min(165,shade+12)+","+Math.min(150,shade+5)+")";ctx.fillRect(i*rw,H*.5-wh/2,rw+1,wh)}
+enemies.filter(function(e){return e.alive}).forEach(function(e){var dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy),ang=Math.atan2(dy,dx),da=Math.atan2(Math.sin(ang-player.a),Math.cos(ang-player.a));if(Math.abs(da)>.7)return;var sx=W/2+Math.tan(da)/Math.tan(fov/2)*W/2,sz=Math.min(H*.7,H/(d*.8));ctx.fillStyle="#080a09";ctx.fillRect(sx-sz*.16,H*.5-sz*.25,sz*.32,sz*.65);ctx.beginPath();ctx.arc(sx,H*.5-sz*.3,sz*.15,0,Math.PI*2);ctx.fill()});
+mc.clearRect(0,0,112,112);for(var y=0;y<16;y++)for(var x=0;x<16;x++){mc.fillStyle=MAP[y][x]=="#"?"#303832":"#101511";mc.fillRect(x*7,y*7,7,7)}mc.fillStyle="#a9c37f";mc.fillRect(player.x*7-2,player.y*7-2,4,4);enemies.forEach(function(e){if(e.alive){mc.fillStyle="#d55a50";mc.fillRect(e.x*7-2,e.y*7-2,4,4)}});mc.fillStyle="#fff";mc.fillRect(exit.x*7-2,exit.y*7-2,4,4);
+}
+function loop(t){if(!active)return;var dt=Math.min(.05,(t-last)/1000);last=t;move(dt);draw();requestAnimationFrame(loop)}
+function bind(id,key){var el=document.getElementById(id),kn=el.querySelector(".knob"),pid=null;el.addEventListener("pointerdown",function(e){pid=e.pointerId;el.setPointerCapture(pid);set(e)});el.addEventListener("pointermove",function(e){if(pid===e.pointerId)set(e)});el.addEventListener("pointerup",function(e){if(pid===e.pointerId){pid=null;kn.style.transform="";input[key+"x"]=0;input[key+"y"]=0;input[key]=0}});function set(e){var r=el.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),m=r.width*.32,n=Math.hypot(dx,dy)||1;if(n>m){dx=dx/n*m;dy=dy/n*m}kn.style.transform="translate("+dx+"px,"+dy+"px)";if(key=="l"){input.lx=dx/m;input.ly=dy/m}else input.rx=dx/m}}
+document.getElementById("start").onclick=start;document.getElementById("fire").onclick=shoot;document.getElementById("reload").onclick=reload;document.getElementById("use").onclick=use;document.getElementById("again").onclick=function(){document.getElementById("end").style.display="none";start()};
+bind("left","l");bind("right","r");
+})();
+</script>
+</body>
+</html>
