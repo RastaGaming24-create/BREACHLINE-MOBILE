@@ -13,7 +13,7 @@ button{border:1px solid #52604f;background:#172019;color:#e9eee8;padding:16px;fo
 #start{margin-top:35px;width:260px;background:#a9c37f;color:#071007;border:0}
 #status{margin-top:25px;color:#91a091;font-size:11px;line-height:1.7}
 #game{display:none;position:absolute;inset:0}
-canvas{position:absolute;inset:0;width:100%;height:100%}
+canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 #hud{position:absolute;inset:0;pointer-events:none;text-shadow:0 2px 4px #000}
 #top{position:absolute;top:calc(14px + env(safe-area-inset-top));left:14px;right:14px;display:flex;justify-content:space-between;font-size:10px;letter-spacing:2px}
 #obj{position:absolute;top:65px;left:14px;border-left:3px solid #a9c37f;padding-left:9px;font-size:18px}
@@ -67,7 +67,7 @@ var MAP=[
 "#..............#",
 "################"];
 var canvas=document.getElementById("view"),ctx=canvas.getContext("2d"),mini=document.getElementById("mini"),mc=mini.getContext("2d");
-var player,enemies,input,active=false,last=0,kills=0,ammo=30,reserve=120,hp=100,won=false;
+var player,enemies,input,active=false,last=0,kills=0,ammo=30,reserve=120,hp=100,won=false,fireHeld=false,lookId=null,lastLookX=0,lastLookY=0;
 var spawn=[[5.5,2.8],[10.5,3.5],[7.5,6.2],[3.5,8.5],[12.5,11.5]],exit={x:13.5,y:13.5};
 function wall(x,y){return !MAP[Math.floor(y)]||MAP[Math.floor(y)][Math.floor(x)]==="#"}
 function clear(x,y,r){return !wall(x-r,y-r)&&!wall(x+r,y-r)&&!wall(x-r,y+r)&&!wall(x+r,y+r)}
@@ -102,13 +102,26 @@ function ray(a){var x=player.x,y=player.y,d=0,step=.025;while(d<24){x+=Math.cos(
 function draw(){
 var W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.fillStyle="#59615b";ctx.fillRect(0,0,W,H*.5);ctx.fillStyle="#0b0e0c";ctx.fillRect(0,H*.5,W,H*.5);
 var fov=Math.PI/3,n=Math.min(360,Math.floor(W/2)),rw=W/n;
-for(var i=0;i<n;i++){var a=player.a-fov/2+fov*i/n,d=ray(a)*Math.cos(a-player.a),wh=Math.min(H*2,H/(d*.75)),shade=Math.max(25,145-d*10);ctx.fillStyle="rgb("+shade+","+Math.min(165,shade+12)+","+Math.min(150,shade+5)+")";ctx.fillRect(i*rw,H*.5-wh/2,rw+1,wh)}
-enemies.filter(function(e){return e.alive}).forEach(function(e){var dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy),ang=Math.atan2(dy,dx),da=Math.atan2(Math.sin(ang-player.a),Math.cos(ang-player.a));if(Math.abs(da)>.7)return;var sx=W/2+Math.tan(da)/Math.tan(fov/2)*W/2,sz=Math.min(H*.7,H/(d*.8));ctx.fillStyle="#080a09";ctx.fillRect(sx-sz*.16,H*.5-sz*.25,sz*.32,sz*.65);ctx.beginPath();ctx.arc(sx,H*.5-sz*.3,sz*.15,0,Math.PI*2);ctx.fill()});
+for(var i=0;i<n;i++){var a=player.a-fov/2+fov*i/n,d=ray(a)*Math.cos(a-player.a),wh=Math.min(H*2,H/(d*.75)),shade=Math.max(25,145-d*10);
+var tex=Math.floor((Math.sin(d*18+a*7)*.5+.5)*18);ctx.fillStyle="rgb("+(shade+tex)+","+Math.min(175,shade+12+tex)+","+Math.min(158,shade+5+tex)+")";ctx.fillRect(i*rw,H*.5-wh/2,rw+1,wh);
+ctx.fillStyle="rgba(0,0,0,.12)";for(var yy=H*.5-wh/2+10;yy<H*.5+wh/2;yy+=22)ctx.fillRect(i*rw,yy,rw+1,2)}
+enemies.filter(function(e){return e.alive}).sort(function(a,b){return distance(b.x,b.y,player.x,player.y)-distance(a.x,a.y,player.x,player.y)}).forEach(function(e){var dx=e.x-player.x,dy=e.y-player.y,d=Math.hypot(dx,dy),ang=Math.atan2(dy,dx),da=Math.atan2(Math.sin(ang-player.a),Math.cos(ang-player.a));if(Math.abs(da)>.7)return;var sx=W/2+Math.tan(da)/Math.tan(fov/2)*W/2,sz=Math.min(H*.7,H/(d*.8)),top=H*.5-sz*.3;
+ctx.fillStyle="#171b18";ctx.fillRect(sx-sz*.16,top+sz*.18,sz*.32,sz*.62);
+ctx.fillStyle="#343a35";ctx.fillRect(sx-sz*.16,top+sz*.18,sz*.32,sz*.08);
+ctx.fillStyle="#a08a72";ctx.beginPath();ctx.arc(sx,top,sz*.15,0,Math.PI*2);ctx.fill();
+ctx.fillStyle="#20251f";ctx.fillRect(sx-sz*.09,top-sz*.04,sz*.035,sz*.035);ctx.fillRect(sx+sz*.055,top-sz*.04,sz*.035,sz*.035);
+ctx.fillStyle="#4e584d";for(var yy=top+sz*.28;yy<top+sz*.72;yy+=12)ctx.fillRect(sx-sz*.16,yy,sz*.32,5);
+ctx.fillStyle="#111";ctx.fillRect(sx-sz*.21,top+sz*.77,sz*.12,sz*.08);ctx.fillRect(sx+sz*.09,top+sz*.77,sz*.12,sz*.08);
+});
 mc.clearRect(0,0,112,112);for(var y=0;y<16;y++)for(var x=0;x<16;x++){mc.fillStyle=MAP[y][x]=="#"?"#303832":"#101511";mc.fillRect(x*7,y*7,7,7)}mc.fillStyle="#a9c37f";mc.fillRect(player.x*7-2,player.y*7-2,4,4);enemies.forEach(function(e){if(e.alive){mc.fillStyle="#d55a50";mc.fillRect(e.x*7-2,e.y*7-2,4,4)}});mc.fillStyle="#fff";mc.fillRect(exit.x*7-2,exit.y*7-2,4,4);
 }
-function loop(t){if(!active)return;var dt=Math.min(.05,(t-last)/1000);last=t;move(dt);draw();requestAnimationFrame(loop)}
+function loop(t){if(!active)return;var dt=Math.min(.033,(t-last)/1000);last=t;move(dt);if(fireHeld)shoot();draw();requestAnimationFrame(loop)}
 function bind(id,key){var el=document.getElementById(id),kn=el.querySelector(".knob"),pid=null;el.addEventListener("pointerdown",function(e){pid=e.pointerId;el.setPointerCapture(pid);set(e)});el.addEventListener("pointermove",function(e){if(pid===e.pointerId)set(e)});el.addEventListener("pointerup",function(e){if(pid===e.pointerId){pid=null;kn.style.transform="";input[key+"x"]=0;input[key+"y"]=0;input[key]=0}});function set(e){var r=el.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),m=r.width*.32,n=Math.hypot(dx,dy)||1;if(n>m){dx=dx/n*m;dy=dy/n*m}kn.style.transform="translate("+dx+"px,"+dy+"px)";if(key=="l"){input.lx=dx/m;input.ly=dy/m}else input.rx=dx/m}}
-document.getElementById("start").onclick=start;document.getElementById("fire").onclick=shoot;document.getElementById("reload").onclick=reload;document.getElementById("use").onclick=use;document.getElementById("again").onclick=function(){document.getElementById("end").style.display="none";start()};
+// Toda la pantalla táctil funciona como pad de cámara: arrastra en cualquier zona libre para mirar.
+canvas.addEventListener("pointerdown",function(e){if(e.pointerType!=="mouse"){lookId=e.pointerId;lastLookX=e.clientX;lastLookY=e.clientY;canvas.setPointerCapture(lookId)}});
+canvas.addEventListener("pointermove",function(e){if(e.pointerId!==lookId)return;var dx=e.clientX-lastLookX;lastLookX=e.clientX;lastLookY=e.clientY;input.rx=Math.max(-1,Math.min(1,dx/28));setTimeout(function(){if(lookId===e.pointerId)input.rx=0},16)});
+canvas.addEventListener("pointerup",function(e){if(e.pointerId===lookId){lookId=null;input.rx=0}});
+document.getElementById("start").onclick=start;document.getElementById("fire").addEventListener("pointerdown",function(e){e.preventDefault();fireHeld=true;shoot()});document.getElementById("fire").addEventListener("pointerup",function(){fireHeld=false});document.getElementById("fire").addEventListener("pointercancel",function(){fireHeld=false});document.getElementById("reload").onclick=reload;document.getElementById("use").onclick=use;document.getElementById("again").onclick=function(){document.getElementById("end").style.display="none";start()};
 bind("left","l");bind("right","r");
 })();
 </script>
